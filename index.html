@@ -618,27 +618,27 @@
       fireRate: 0.22,
       cannons: 1,
       color: COLORS.lime,
-      desc: "Reinforced neon plating with layered shields. Withstands 4 enemy attacks before death.",
+      desc: "Upgraded shield package with reinforced neon plating. Withstands 4 enemy attacks before death. Standard fire rate, single cannon.",
     },
     pulse: {
       id: "pulse",
       name: "PULSE RAZOR",
       cost: 750,
-      maxHp: 2,
+      maxHp: 4,
       fireRate: 0.10,
       cannons: 1,
       color: COLORS.orange,
-      desc: "Overclocked single cannon. Fires much faster than the starter ship for denser damage.",
+      desc: "Includes the upgraded shield package — withstands 4 enemy attacks before death. Overclocked single cannon fires much faster than the starter ship.",
     },
     trinity: {
       id: "trinity",
       name: "TRINITY GUNSHIP",
       cost: 1500,
-      maxHp: 2,
+      maxHp: 4,
       fireRate: 0.11,
       cannons: 3,
       color: COLORS.magenta,
-      desc: "Triple-cannon array with rapid fire. Three simultaneous beams for maximum void clear.",
+      desc: "Includes the upgraded shield package — withstands 4 enemy attacks before death. Triple-cannon array with rapid fire for maximum void clear.",
     },
   };
 
@@ -799,7 +799,10 @@
     s.start();
   }
 
-  /** Chiptune-style arcade loop for intro + home menu. */
+  /**
+   * New arcade theme: brighter major-key space-shooter loop
+   * (slower pulse, melodic lead, soft pads — plays on intro + menu).
+   */
   function startMusic() {
     if (!ensureAudio() || music.playing) return;
     music.playing = true;
@@ -808,46 +811,73 @@
     const master = audioCtx.createGain();
     master.gain.value = 0.0001;
     master.connect(audioCtx.destination);
-    master.gain.linearRampToValueAtTime(0.12, audioCtx.currentTime + 0.6);
+    master.gain.linearRampToValueAtTime(0.11, audioCtx.currentTime + 0.8);
     music.master = master;
 
-    // soft low-pass for less harsh mobile speakers
     const filter = audioCtx.createBiquadFilter();
     filter.type = "lowpass";
-    filter.frequency.value = 3200;
-    filter.Q.value = 0.7;
+    filter.frequency.value = 2800;
+    filter.Q.value = 0.5;
     filter.connect(master);
 
-    // BPM ~128, 16th notes
-    const bpm = 128;
-    const stepDur = (60 / bpm) / 4;
+    // ~96 BPM, 8th-note grid — more laid-back classic arcade
+    const bpm = 96;
+    const stepDur = (60 / bpm) / 2;
 
-    // Am cyberpunk-ish: A minor / C maj flavors
-    const bassPattern = [55, 55, 82.5, 55, 65.4, 65.4, 98, 65.4, 73.4, 73.4, 110, 73.4, 65.4, 82.5, 98, 110];
-    const leadPattern = [
-      440, 0, 523.25, 0, 659.25, 523.25, 0, 440,
-      392, 0, 493.88, 0, 587.33, 493.88, 0, 392,
-      349.23, 0, 440, 0, 523.25, 440, 0, 349.23,
-      329.63, 392, 440, 523.25, 659.25, 0, 523.25, 0,
+    // Note helpers (Hz)
+    const C3 = 130.81, D3 = 146.83, E3 = 164.81, F3 = 174.61, G3 = 196.00, A3 = 220.00, B3 = 246.94;
+    const C4 = 261.63, D4 = 293.66, E4 = 329.63, F4 = 349.23, G4 = 392.00, A4 = 440.00, B4 = 493.88;
+    const C5 = 523.25, D5 = 587.33, E5 = 659.25, G5 = 783.99;
+
+    // Warm root motion: C - Am - F - G
+    const bassPattern = [
+      C3, C3, C3, G3, A3, A3, A3, E3,
+      F3, F3, F3, C3, G3, G3, D3, G3,
     ];
-    const arpPattern = [220, 261.63, 329.63, 392, 440, 392, 329.63, 261.63];
 
-    function tone(freq, when, dur, type, vol, dest) {
+    // Catchy hero lead (longer holds via repeated notes + rests as 0)
+    const leadPattern = [
+      E4, 0, G4, 0, C5, C5, B4, 0,
+      A4, 0, G4, 0, E4, G4, A4, 0,
+      F4, 0, A4, 0, C5, C5, D5, 0,
+      B4, 0, G4, 0, D5, C5, B4, A4,
+      G4, 0, E4, 0, G4, A4, C5, 0,
+      D5, 0, E5, 0, C5, 0, G4, 0,
+      A4, A4, G4, 0, F4, 0, E4, 0,
+      D4, E4, G4, 0, C5, 0, 0, 0,
+    ];
+
+    // Soft sparkling arp under the lead
+    const arpPattern = [
+      C4, E4, G4, C5, E4, G4, C5, E5,
+      A3, C4, E4, A4, C4, E4, A4, C5,
+      F3, A3, C4, F4, A3, C4, F4, A4,
+      G3, B3, D4, G4, B3, D4, G4, B4,
+    ];
+
+    function tone(freq, when, dur, type, vol, dest, detune) {
       if (!freq) return;
       const o = audioCtx.createOscillator();
       const g = audioCtx.createGain();
       o.type = type;
       o.frequency.setValueAtTime(freq, when);
+      if (detune) o.detune.setValueAtTime(detune, when);
       g.gain.setValueAtTime(0.0001, when);
-      g.gain.exponentialRampToValueAtTime(vol, when + 0.01);
-      g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+      g.gain.exponentialRampToValueAtTime(vol, when + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, when + Math.max(0.05, dur));
       o.connect(g); g.connect(dest);
       o.start(when);
-      o.stop(when + dur + 0.02);
+      o.stop(when + dur + 0.03);
+    }
+
+    function pad(freq, when, dur, vol) {
+      // dual detuned triangles = soft retro pad
+      tone(freq, when, dur, "triangle", vol, filter, -6);
+      tone(freq, when, dur, "triangle", vol * 0.7, filter, 7);
     }
 
     function hat(when, vol) {
-      const n = Math.floor(audioCtx.sampleRate * 0.04);
+      const n = Math.floor(audioCtx.sampleRate * 0.025);
       const buf = audioCtx.createBuffer(1, n, audioCtx.sampleRate);
       const d = buf.getChannelData(0);
       for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
@@ -856,9 +886,9 @@
       const g = audioCtx.createGain();
       const f = audioCtx.createBiquadFilter();
       f.type = "highpass";
-      f.frequency.value = 6000;
+      f.frequency.value = 7000;
       g.gain.setValueAtTime(vol, when);
-      g.gain.exponentialRampToValueAtTime(0.0001, when + 0.04);
+      g.gain.exponentialRampToValueAtTime(0.0001, when + 0.03);
       s.connect(f); f.connect(g); g.connect(filter);
       s.start(when);
     }
@@ -867,46 +897,73 @@
       const o = audioCtx.createOscillator();
       const g = audioCtx.createGain();
       o.type = "sine";
-      o.frequency.setValueAtTime(140, when);
-      o.frequency.exponentialRampToValueAtTime(42, when + 0.12);
-      g.gain.setValueAtTime(0.22, when);
-      g.gain.exponentialRampToValueAtTime(0.0001, when + 0.16);
+      o.frequency.setValueAtTime(110, when);
+      o.frequency.exponentialRampToValueAtTime(38, when + 0.14);
+      g.gain.setValueAtTime(0.18, when);
+      g.gain.exponentialRampToValueAtTime(0.0001, when + 0.18);
       o.connect(g); g.connect(filter);
       o.start(when);
-      o.stop(when + 0.18);
+      o.stop(when + 0.2);
+    }
+
+    function snare(when) {
+      const n = Math.floor(audioCtx.sampleRate * 0.08);
+      const buf = audioCtx.createBuffer(1, n, audioCtx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 1.5);
+      const s = audioCtx.createBufferSource();
+      s.buffer = buf;
+      const g = audioCtx.createGain();
+      const f = audioCtx.createBiquadFilter();
+      f.type = "bandpass";
+      f.frequency.value = 1800;
+      g.gain.setValueAtTime(0.08, when);
+      g.gain.exponentialRampToValueAtTime(0.0001, when + 0.1);
+      s.connect(f); f.connect(g); g.connect(filter);
+      s.start(when);
     }
 
     function scheduleWindow() {
       if (!music.playing || !audioCtx) return;
       const now = audioCtx.currentTime;
-      // schedule ~0.5s ahead in chunks
       const steps = 8;
       for (let i = 0; i < steps; i++) {
         const step = music.step + i;
-        const when = now + i * stepDur + 0.05;
+        const when = now + i * stepDur + 0.04;
         const bi = step % bassPattern.length;
         const li = step % leadPattern.length;
         const ai = step % arpPattern.length;
 
-        // kick on 0, 4, 8, 12
+        // four-on-the-floor-ish but lighter
         if (step % 4 === 0) kick(when);
-        // hats on offbeats
-        if (step % 2 === 1) hat(when, 0.035);
-        if (step % 4 === 2) hat(when, 0.055);
+        if (step % 4 === 2) snare(when);
+        if (step % 2 === 1) hat(when, 0.02);
+        if (step % 4 === 0) hat(when, 0.03);
 
-        tone(bassPattern[bi], when, stepDur * 0.9, "triangle", 0.14, filter);
-        tone(arpPattern[ai], when, stepDur * 0.7, "square", 0.03, filter);
+        // rounded bass
+        tone(bassPattern[bi], when, stepDur * 0.95, "triangle", 0.12, filter);
+        tone(bassPattern[bi] * 0.5, when, stepDur * 0.9, "sine", 0.06, filter);
+
+        // arp sparkle every step (quiet)
+        tone(arpPattern[ai], when, stepDur * 0.55, "sine", 0.025, filter);
+
+        // lead melody
         if (leadPattern[li]) {
-          tone(leadPattern[li], when, stepDur * 0.85, "square", 0.045, filter);
-          // slight harmony
-          tone(leadPattern[li] * 1.5, when, stepDur * 0.5, "sawtooth", 0.012, filter);
+          tone(leadPattern[li], when, stepDur * 1.05, "square", 0.038, filter);
+          tone(leadPattern[li] * 2, when, stepDur * 0.4, "sine", 0.012, filter);
+        }
+
+        // airy pad on bar starts
+        if (step % 8 === 0) {
+          const roots = [C4, A3, F3, G3];
+          pad(roots[(step / 8 | 0) % 4], when, stepDur * 7.5, 0.02);
         }
       }
       music.step += steps;
     }
 
     scheduleWindow();
-    music.timer = setInterval(scheduleWindow, stepDur * 8 * 1000 * 0.92);
+    music.timer = setInterval(scheduleWindow, stepDur * 8 * 1000 * 0.9);
   }
 
   function stopMusic(fade = true) {
@@ -1622,8 +1679,8 @@
     g.closePath();
     g.fill();
 
-    // Aegis shield ring
-    if (kind === "aegis") {
+    // Upgraded shield package ring (Aegis / Pulse / Trinity)
+    if (ship.maxHp >= 4) {
       g.strokeStyle = "rgba(125,255,179,0.75)";
       g.lineWidth = 3;
       g.shadowColor = "#7dffb3";
@@ -1980,8 +2037,8 @@
       ctx.stroke();
     }
 
-    // Aegis passive ring
-    if (ship.id === "aegis") {
+    // Upgraded shield package passive ring (any 4-HP ship)
+    if (ship.maxHp >= 4) {
       ctx.strokeStyle = rgba(COLORS.lime, 0.35);
       ctx.lineWidth = 1.5;
       ctx.shadowColor = COLORS.lime;
