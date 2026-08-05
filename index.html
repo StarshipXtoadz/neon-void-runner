@@ -36,6 +36,10 @@
       pointer-events: auto;
       touch-action: manipulation;
     }
+    /* Panels must receive touches and allow vertical scroll on mobile */
+    #hud .panel {
+      pointer-events: auto;
+    }
     #score-wrap {
       position: absolute;
       top: max(14px, env(safe-area-inset-top));
@@ -137,26 +141,31 @@
     #btn-pause:active { transform: scale(0.94); border-color: #ff00aa; }
     #btn-pause svg { width: 22px; height: 22px; fill: currentColor; filter: drop-shadow(0 0 6px #00f0ff); }
 
-    /* Modal panels */
+    /* Modal panels — single outer scroller (nested max-height + flex-center breaks iOS scroll) */
     .panel {
       position: absolute;
       inset: 0;
       display: none;
+      flex-direction: column;
       align-items: center;
-      justify-content: center;
-      padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
-      background: rgba(4, 0, 14, 0.72);
+      justify-content: flex-start;
+      padding: max(12px, env(safe-area-inset-top)) 12px max(20px, env(safe-area-inset-bottom));
+      background: rgba(4, 0, 14, 0.78);
       backdrop-filter: blur(10px);
       z-index: 30;
+      overflow-x: hidden;
       overflow-y: auto;
       -webkit-overflow-scrolling: touch;
+      overscroll-behavior: contain;
       touch-action: pan-y;
     }
     .panel.open { display: flex; }
     .panel-card {
       width: min(440px, 100%);
-      max-height: min(92vh, 820px);
-      overflow-y: auto;
+      flex: 0 0 auto;
+      max-height: none;
+      overflow: visible;
+      margin: 8px auto 24px;
       border-radius: 18px;
       border: 1px solid #9b5cff88;
       background: linear-gradient(160deg, rgba(18, 0, 40, 0.95), rgba(6, 0, 18, 0.96));
@@ -164,6 +173,12 @@
       padding: 22px 18px 18px;
       color: #e8f7ff;
       text-align: center;
+      /* allow touch scroll to bubble to .panel */
+      touch-action: pan-y;
+    }
+    /* Shop: a bit more bottom padding so last item is reachable */
+    #panel-shop .panel-card {
+      padding-bottom: 28px;
     }
     .panel-card h2 {
       font-size: clamp(22px, 5vw, 28px);
@@ -275,16 +290,37 @@
     .shop-item-top {
       display: flex;
       justify-content: space-between;
-      align-items: flex-start;
+      align-items: center;
       gap: 10px;
       margin-bottom: 6px;
     }
+    .shop-item-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+      flex: 1;
+    }
+    .shop-item-icon {
+      width: 56px;
+      height: 56px;
+      flex: 0 0 56px;
+      border-radius: 12px;
+      border: 1px solid #00f0ff44;
+      background:
+        radial-gradient(circle at 40% 45%, rgba(0, 240, 255, 0.18), transparent 60%),
+        rgba(4, 0, 18, 0.9);
+      box-shadow: 0 0 14px #00f0ff22, inset 0 0 12px #ff00aa18;
+      display: block;
+      object-fit: contain;
+    }
     .shop-item-name {
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 800;
-      letter-spacing: 0.12em;
+      letter-spacing: 0.1em;
       color: #7df9ff;
       text-shadow: 0 0 10px #00f0ff88;
+      line-height: 1.25;
     }
     .shop-item-cost {
       font-size: 12px;
@@ -293,6 +329,9 @@
       color: #ff7ad9;
       white-space: nowrap;
       text-shadow: 0 0 8px #ff00aa66;
+      flex: 0 0 auto;
+      align-self: flex-start;
+      padding-top: 4px;
     }
     .shop-item-desc {
       font-size: 12px;
@@ -314,6 +353,13 @@
       opacity: 0.7;
       margin: 6px 0 8px;
       text-align: left;
+    }
+    .shop-scroll-hint {
+      font-size: 10px;
+      letter-spacing: 0.16em;
+      color: #9adfff;
+      opacity: 0.55;
+      margin: -6px 0 12px;
     }
     .toast {
       position: fixed;
@@ -381,6 +427,7 @@
         <h2>VOID SHOP</h2>
         <div class="panel-sub">SPEND RUN POINTS</div>
         <div class="wallet-line" id="shop-wallet">PTS 0</div>
+        <div class="shop-scroll-hint">SWIPE TO SCROLL</div>
         <div class="shop-list" id="shop-list"></div>
         <div class="btn-row">
           <button class="neon-btn ghost" id="btn-shop-back" type="button">BACK</button>
@@ -1121,6 +1168,10 @@
     state = STATE.SHOP;
     renderShop();
     setHudForState();
+    // Reset scroll so players start at the top; scrolling works on the panel itself
+    requestAnimationFrame(() => {
+      panelShop.scrollTop = 0;
+    });
   }
 
   function closeShop() {
@@ -1132,6 +1183,152 @@
         lastBankedPoints > 0 ? ("+" + lastBankedPoints + " PTS BANKED") : "";
     }
     setHudForState();
+  }
+
+  /** Draw a neon ship (or continue token) preview for the shop. */
+  function makeShopIconDataUrl(kind) {
+    const size = 112;
+    const c = document.createElement("canvas");
+    c.width = size;
+    c.height = size;
+    const g = c.getContext("2d");
+    g.clearRect(0, 0, size, size);
+
+    // soft void background glow
+    const bg = g.createRadialGradient(size * 0.45, size * 0.5, 2, size * 0.5, size * 0.5, size * 0.48);
+    bg.addColorStop(0, "rgba(0,240,255,0.12)");
+    bg.addColorStop(1, "rgba(0,0,0,0)");
+    g.fillStyle = bg;
+    g.fillRect(0, 0, size, size);
+
+    const cx = size * 0.48;
+    const cy = size * 0.52;
+
+    if (kind === "continue") {
+      g.save();
+      g.translate(cx, cy);
+      g.strokeStyle = "#ff9f1c";
+      g.fillStyle = "rgba(255,159,28,0.2)";
+      g.lineWidth = 5;
+      g.shadowColor = "#ff9f1c";
+      g.shadowBlur = 12;
+      g.beginPath();
+      g.arc(0, 0, 28, -Math.PI * 0.85, Math.PI * 0.55);
+      g.stroke();
+      // arrow head
+      g.beginPath();
+      g.moveTo(18, 18);
+      g.lineTo(34, 10);
+      g.lineTo(22, 2);
+      g.closePath();
+      g.fillStyle = "#ffb86c";
+      g.fill();
+      // heart / hull pip
+      g.shadowColor = "#7dffb3";
+      g.fillStyle = "#7dffb3";
+      g.beginPath();
+      g.arc(-4, -2, 7, 0, Math.PI * 2);
+      g.fill();
+      g.restore();
+      return c.toDataURL("image/png");
+    }
+
+    const ship = SHIPS[kind] || SHIPS.starter;
+    const col = ship.color;
+
+    g.save();
+    g.translate(cx, cy);
+    g.rotate(-0.12);
+
+    // engine flare
+    g.shadowColor = col;
+    g.shadowBlur = 16;
+    const flare = g.createLinearGradient(-36, 0, 0, 0);
+    flare.addColorStop(0, "rgba(0,0,0,0)");
+    flare.addColorStop(0.4, "rgba(255,0,170,0.45)");
+    flare.addColorStop(1, col);
+    g.fillStyle = flare;
+    g.beginPath();
+    g.moveTo(-8, 0);
+    g.lineTo(-34, -8);
+    g.lineTo(-34, 8);
+    g.closePath();
+    g.fill();
+
+    // Aegis shield ring
+    if (kind === "aegis") {
+      g.strokeStyle = "rgba(125,255,179,0.75)";
+      g.lineWidth = 3;
+      g.shadowColor = "#7dffb3";
+      g.shadowBlur = 14;
+      g.beginPath();
+      g.arc(2, 0, 34, 0, Math.PI * 2);
+      g.stroke();
+    }
+
+    // Pulse speed ticks
+    if (kind === "pulse") {
+      g.strokeStyle = "rgba(255,159,28,0.7)";
+      g.lineWidth = 2;
+      g.shadowBlur = 8;
+      for (let i = 0; i < 3; i++) {
+        const x = -18 - i * 8;
+        g.beginPath();
+        g.moveTo(x, -16 - i);
+        g.lineTo(x - 10, -16 - i);
+        g.moveTo(x, 16 + i);
+        g.lineTo(x - 10, 16 + i);
+        g.stroke();
+      }
+    }
+
+    // Trinity side cannons
+    if (kind === "trinity") {
+      g.fillStyle = "#ff4fd8";
+      g.shadowColor = "#ff00aa";
+      g.shadowBlur = 10;
+      g.fillRect(4, -22, 16, 5);
+      g.fillRect(4, 17, 16, 5);
+    }
+
+    // main hull triangle (pointing right)
+    g.shadowColor = col;
+    g.shadowBlur = 18;
+    const body = g.createLinearGradient(-20, 0, 28, 0);
+    body.addColorStop(0, "#ff00aa");
+    body.addColorStop(0.45, col);
+    body.addColorStop(1, "#00f0ff");
+    g.fillStyle = body;
+    g.beginPath();
+    g.moveTo(28, 0);
+    g.lineTo(-18, -18);
+    g.lineTo(-10, 0);
+    g.lineTo(-18, 18);
+    g.closePath();
+    g.fill();
+
+    // outline
+    g.strokeStyle = "rgba(232,247,255,0.85)";
+    g.lineWidth = 1.5;
+    g.shadowBlur = 6;
+    g.stroke();
+
+    // core
+    g.fillStyle = "#ffffff";
+    g.shadowColor = "#ffffff";
+    g.shadowBlur = 8;
+    g.beginPath();
+    g.arc(2, 0, 4.5, 0, Math.PI * 2);
+    g.fill();
+
+    g.restore();
+    return c.toDataURL("image/png");
+  }
+
+  const shopIconCache = {};
+  function shopIcon(kind) {
+    if (!shopIconCache[kind]) shopIconCache[kind] = makeShopIconDataUrl(kind);
+    return shopIconCache[kind];
   }
 
   function renderShop() {
@@ -1148,6 +1345,7 @@
       costLabel: CONTINUE_COST + " PTS",
       desc: "Adds 1 continue token. When you die, spend a continue to revive mid-run with full hull — keep your score and distance.",
       buttonText: "BUY CONTINUE",
+      iconKind: "continue",
       onClick: () => {
         if (save.points < CONTINUE_COST) { toast("Not enough points"); return; }
         save.points -= CONTINUE_COST;
@@ -1175,6 +1373,7 @@
         costLabel: owned ? (equipped ? "ACTIVE" : "OWNED") : (ship.cost + " PTS"),
         desc: ship.desc,
         buttonText: btnText,
+        iconKind: id,
         owned,
         equipped,
         disabled: equipped,
@@ -1201,24 +1400,50 @@
     }
   }
 
-  function makeShopCard({ name, costLabel, desc, buttonText, onClick, owned, equipped, disabled }) {
+  function makeShopCard({ name, costLabel, desc, buttonText, onClick, owned, equipped, disabled, iconKind }) {
     const el = document.createElement("div");
     el.className = "shop-item" + (owned ? " owned" : "") + (equipped ? " equipped" : "");
-    el.innerHTML =
-      '<div class="shop-item-top">' +
-        '<div class="shop-item-name"></div>' +
-        '<div class="shop-item-cost"></div>' +
-      "</div>" +
-      '<div class="shop-item-desc"></div>';
-    el.querySelector(".shop-item-name").textContent = name;
-    el.querySelector(".shop-item-cost").textContent = costLabel;
-    el.querySelector(".shop-item-desc").textContent = desc;
+
+    const top = document.createElement("div");
+    top.className = "shop-item-top";
+
+    const left = document.createElement("div");
+    left.className = "shop-item-left";
+
+    if (iconKind) {
+      const img = document.createElement("img");
+      img.className = "shop-item-icon";
+      img.src = shopIcon(iconKind);
+      img.alt = name;
+      img.draggable = false;
+      left.appendChild(img);
+    }
+
+    const nameEl = document.createElement("div");
+    nameEl.className = "shop-item-name";
+    nameEl.textContent = name;
+    left.appendChild(nameEl);
+
+    const costEl = document.createElement("div");
+    costEl.className = "shop-item-cost";
+    costEl.textContent = costLabel;
+
+    top.appendChild(left);
+    top.appendChild(costEl);
+
+    const descEl = document.createElement("div");
+    descEl.className = "shop-item-desc";
+    descEl.textContent = desc;
+
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "neon-btn" + (equipped ? " lime" : owned ? "" : " magenta");
     btn.textContent = buttonText;
     btn.disabled = !!disabled;
     btn.addEventListener("click", (e) => { e.stopPropagation(); onClick(); });
+
+    el.appendChild(top);
+    el.appendChild(descEl);
     el.appendChild(btn);
     return el;
   }
