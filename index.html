@@ -955,23 +955,6 @@
       o.stop(when + 0.2);
     }
 
-    function snare(when) {
-      const n = Math.floor(audioCtx.sampleRate * 0.08);
-      const buf = audioCtx.createBuffer(1, n, audioCtx.sampleRate);
-      const d = buf.getChannelData(0);
-      for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 1.5);
-      const s = audioCtx.createBufferSource();
-      s.buffer = buf;
-      const g = audioCtx.createGain();
-      const f = audioCtx.createBiquadFilter();
-      f.type = "bandpass";
-      f.frequency.value = 1800;
-      g.gain.setValueAtTime(0.08, when);
-      g.gain.exponentialRampToValueAtTime(0.0001, when + 0.1);
-      s.connect(f); f.connect(g); g.connect(filter);
-      s.start(when);
-    }
-
     function scheduleWindow() {
       if (!music.playing || !audioCtx) return;
       const now = audioCtx.currentTime;
@@ -983,11 +966,10 @@
         const li = step % leadPattern.length;
         const ai = step % arpPattern.length;
 
-        // four-on-the-floor-ish but lighter
+        // Soft pulse only — no snare/clash hits
         if (step % 4 === 0) kick(when);
-        if (step % 4 === 2) snare(when);
-        if (step % 2 === 1) hat(when, 0.02);
-        if (step % 4 === 0) hat(when, 0.03);
+        if (step % 2 === 1) hat(when, 0.018);
+        if (step % 4 === 0) hat(when, 0.025);
 
         // rounded bass
         tone(bassPattern[bi], when, stepDur * 0.95, "triangle", 0.12, filter);
